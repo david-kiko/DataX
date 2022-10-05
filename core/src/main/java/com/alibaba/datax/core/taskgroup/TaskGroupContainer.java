@@ -12,6 +12,7 @@ import com.alibaba.datax.common.util.Configuration;
 import com.alibaba.datax.core.AbstractContainer;
 import com.alibaba.datax.core.statistics.communication.Communication;
 import com.alibaba.datax.core.statistics.communication.CommunicationTool;
+import com.alibaba.datax.core.statistics.communication.LocalTGCommunicationManager;
 import com.alibaba.datax.core.statistics.container.communicator.taskgroup.StandaloneTGContainerCommunicator;
 import com.alibaba.datax.core.statistics.plugin.task.AbstractTaskPluginCollector;
 import com.alibaba.datax.core.taskgroup.runner.AbstractRunner;
@@ -22,16 +23,20 @@ import com.alibaba.datax.core.transport.exchanger.BufferedRecordExchanger;
 import com.alibaba.datax.core.transport.exchanger.BufferedRecordTransformerExchanger;
 import com.alibaba.datax.core.transport.transformer.TransformerExecution;
 import com.alibaba.datax.core.util.ClassUtil;
+import com.alibaba.datax.core.util.FileUtil;
 import com.alibaba.datax.core.util.FrameworkErrorCode;
 import com.alibaba.datax.core.util.TransformerUtil;
 import com.alibaba.datax.core.util.container.CoreConstant;
 import com.alibaba.datax.core.util.container.LoadUtil;
 import com.alibaba.datax.dataxservice.face.domain.enums.State;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.*;
 
 public class TaskGroupContainer extends AbstractContainer {
@@ -74,6 +79,8 @@ public class TaskGroupContainer extends AbstractContainer {
                 CoreConstant.DATAX_CORE_TRANSPORT_CHANNEL_CLASS);
         this.taskCollectorClass = this.configuration.getString(
                 CoreConstant.DATAX_CORE_STATISTICS_COLLECTOR_PLUGIN_TASKCLASS);
+
+        LocalTGCommunicationManager.registerTaskGroupCommunication(taskGroupId, new Communication());
     }
 
     private void initCommunicator(Configuration configuration) {
@@ -271,8 +278,8 @@ public class TaskGroupContainer extends AbstractContainer {
             //6.最后还要汇报一次
             reportTaskGroupCommunication(lastTaskGroupContainerCommunication, taskCountInThisTaskGroup);
 
-
         } catch (Throwable e) {
+
             Communication nowTaskGroupContainerCommunication = this.containerCommunicator.collect();
 
             if (nowTaskGroupContainerCommunication.getThrowable() == null) {
@@ -293,6 +300,19 @@ public class TaskGroupContainer extends AbstractContainer {
                 }
 
                 LOG.info(PerfTrace.getInstance().summarizeNoException());
+            }
+
+            //写文件
+            String finishFileName = "finish-" + taskGroupId;
+            String absFinishFileName = StringUtils.join(new String[]{
+                    CoreConstant.DATAX_HOME, "result", finishFileName}, File.separator);
+            Communication communication = LocalTGCommunicationManager.getTaskGroupCommunication(taskGroupId);
+            Integer state = communication.getState().value();
+
+            try {
+                FileUtil.writeFile(absFinishFileName, state.toString(), false);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }

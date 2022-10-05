@@ -16,6 +16,7 @@ import com.alibaba.datax.core.container.util.HookInvoker;
 import com.alibaba.datax.core.container.util.JobAssignUtil;
 import com.alibaba.datax.core.job.scheduler.AbstractScheduler;
 import com.alibaba.datax.core.job.scheduler.processinner.StandAloneScheduler;
+import com.alibaba.datax.core.job.scheduler.processouter.DistributeScheduler;
 import com.alibaba.datax.core.statistics.communication.Communication;
 import com.alibaba.datax.core.statistics.communication.CommunicationTool;
 import com.alibaba.datax.core.statistics.container.communicator.AbstractContainerCommunicator;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 /**
  * Created by jingxing on 14-8-24.
@@ -510,11 +512,17 @@ public class JobContainer extends AbstractContainer {
 
         LOG.info("Scheduler starts [{}] taskGroups.", taskGroupConfigs.size());
 
-        ExecuteMode executeMode = null;
+        ExecuteMode executeMode = ExecuteMode.STANDALONE;
         AbstractScheduler scheduler;
         try {
-        	executeMode = ExecuteMode.STANDALONE;
-            scheduler = initStandaloneScheduler(this.configuration);
+            executeMode = ExecuteMode.toExecuteMode(this.configuration.getString(CoreConstant.DATAX_CORE_CONTAINER_JOB_MODE));
+
+            if (ExecuteMode.isDistribute(executeMode.getValue())) {
+                // 判断运行模式，如果是distribute分布式模式，走这里初始化netty server服务和使用outer实现类
+                scheduler = initDistributeScheduler(this.configuration, taskGroupConfigs);
+            } else {
+                scheduler = initStandaloneScheduler(this.configuration);
+            }
 
             //设置 executeMode
             for (Configuration taskGroupConfig : taskGroupConfigs) {
@@ -554,6 +562,14 @@ public class JobContainer extends AbstractContainer {
         super.setContainerCommunicator(containerCommunicator);
 
         return new StandAloneScheduler(containerCommunicator);
+    }
+
+    private AbstractScheduler initDistributeScheduler(Configuration configuration,
+                                                      List<Configuration> taskGroupConfigs) {
+        AbstractContainerCommunicator containerCommunicator = new StandAloneJobContainerCommunicator(configuration);
+        super.setContainerCommunicator(containerCommunicator);
+
+        return new DistributeScheduler(containerCommunicator);
     }
 
     private void post() {
