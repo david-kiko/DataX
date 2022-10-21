@@ -97,6 +97,10 @@ public class CoreConstant {
 
     public static final String DATAX_JOB_SETTING_DRYRUN = "job.setting.dryRun";
 
+	public static final String DATAX_JOB_SETTING_DISTRIBUTE_CPU = "job.setting.distribute.cpu";
+
+	public static final String DATAX_JOB_SETTING_DISTRIBUTE_MEMORY = "job.setting.distribute.memory";
+
     public static final String DATAX_JOB_PREHANDLER_PLUGINTYPE = "job.preHandler.pluginType";
 
     public static final String DATAX_JOB_PREHANDLER_PLUGINNAME = "job.preHandler.pluginName";

@@ -21,6 +21,7 @@ public class JarLoader extends URLClassLoader {
     }
 
     public JarLoader(String[] paths, ClassLoader parent) {
+
         super(getURLs(paths), parent);
     }
 
@@ -68,7 +69,7 @@ public class JarLoader extends URLClassLoader {
         File jarPath = new File(path);
 
         Validate.isTrue(jarPath.exists() && jarPath.isDirectory(),
-                "jar包路径必须存在且为目录.");
+                "jar包路径必须存在且为目录. xxx " + path);
 
 		/* set filter */
         FileFilter jarFilter = new FileFilter() {

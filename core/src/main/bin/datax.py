@@ -33,7 +33,7 @@ LOGBACK_FILE = ("%s/conf/logback.xml") % (DATAX_HOME)
 DEFAULT_JVM = "-Xms1g -Xmx1g -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s/log" % (DATAX_HOME)
 DEFAULT_PROPERTY_CONF = "-Dfile.encoding=UTF-8 -Dlogback.statusListenerClass=ch.qos.logback.core.status.NopStatusListener -Djava.security.egd=file:///dev/urandom -Ddatax.home=%s -Dlogback.configurationFile=%s" % (
     DATAX_HOME, LOGBACK_FILE)
-ENGINE_COMMAND = "java -server ${jvm} %s -classpath %s  ${params} com.alibaba.datax.core.Engine -mode ${mode} -jobid ${jobid} -job ${job}" % (
+ENGINE_COMMAND = "java -server ${jvm} %s -classpath %s  ${params} com.alibaba.datax.core.Engine -mode ${mode} -jobid ${jobid} -taskgroupid ${taskgroupid} -driver ${driver} -job ${job}" % (
     DEFAULT_PROPERTY_CONF, CLASS_PATH)
 REMOTE_DEBUG_CONFIG = "-Xdebug -Xrunjdwp:transport=dt_socket,server=y,address=9999"
 
@@ -94,6 +94,12 @@ def getOptionParser():
                                   action="store", default="standalone",
                                   help="Set job runtime mode such as: standalone, local, distribute. "
                                        "Default mode is standalone.")
+    prodEnvOptionGroup.add_option("--taskgroupid", metavar="<task group unique id>",
+                                  dest="taskgroupid", action="store", default="-1",
+                                  help="Set taskgroup unique id when running by Distribute/Local Mode.")
+    prodEnvOptionGroup.add_option("--driver", metavar="<driver address>",
+                                  dest="driver", action="store", default="127.0.0.1:8070",
+                                  help="driver address.")
     prodEnvOptionGroup.add_option("-p", "--params", metavar="<parameter used in job config>",
                                   action="store", dest="params",
                                   help='Set job parameter, eg: the source tableName you want to set it by command, '
@@ -190,6 +196,12 @@ def buildStartCommand(options, args):
     if options.mode:
         commandMap["mode"] = options.mode
 
+    if options.mode:
+        commandMap["taskgroupid"] = options.taskgroupid
+
+    if options.mode:
+        commandMap["driver"] = options.driver
+
     # jobResource 可能是 URL，也可能是本地文件路径（相对,绝对）
     jobResource = args[0]
     if not isUrl(jobResource):
@@ -233,6 +245,7 @@ if __name__ == "__main__":
 
     startCommand = buildStartCommand(options, args)
     # print startCommand
+    print(startCommand)
 
     child_process = subprocess.Popen(startCommand, shell=True)
     register_signal()

@@ -20,24 +20,35 @@ import com.alibaba.datax.core.job.scheduler.processouter.DistributeScheduler;
 import com.alibaba.datax.core.statistics.communication.Communication;
 import com.alibaba.datax.core.statistics.communication.CommunicationTool;
 import com.alibaba.datax.core.statistics.container.communicator.AbstractContainerCommunicator;
+import com.alibaba.datax.core.statistics.container.communicator.job.DistributeJobContainerCommunicator;
 import com.alibaba.datax.core.statistics.container.communicator.job.StandAloneJobContainerCommunicator;
 import com.alibaba.datax.core.statistics.plugin.DefaultJobPluginCollector;
+import com.alibaba.datax.core.taskgroup.TaskGroupInfo;
 import com.alibaba.datax.core.util.ErrorRecordChecker;
 import com.alibaba.datax.core.util.FrameworkErrorCode;
 import com.alibaba.datax.core.util.container.ClassLoaderSwapper;
 import com.alibaba.datax.core.util.container.CoreConstant;
 import com.alibaba.datax.core.util.container.LoadUtil;
 import com.alibaba.datax.dataxservice.face.domain.enums.ExecuteMode;
+import com.alibaba.datax.dataxservice.netty.enumeration.NettyConstant;
+import com.alibaba.datax.dataxservice.netty.enumeration.NettyErrorCode;
+import com.alibaba.datax.dataxservice.netty.server.NettyServer;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.BindException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Created by jingxing on 14-8-24.
@@ -566,10 +577,51 @@ public class JobContainer extends AbstractContainer {
 
     private AbstractScheduler initDistributeScheduler(Configuration configuration,
                                                       List<Configuration> taskGroupConfigs) {
-        AbstractContainerCommunicator containerCommunicator = new StandAloneJobContainerCommunicator(configuration);
+
+        // 启动netty server服务，并返回使用的port端口值（当8070端口冲突时，会将端口号自动尝试+1，避免同一个worker启动多个datax作业端口冲突）
+        Integer finalPort = startNettyServer(Executors.newSingleThreadExecutor(new DefaultThreadFactory("netty-server",true)), 8070, 50);
+        // 环境变量获取driver所在的pod地址
+        String serverIp = System.getenv(NettyConstant.DATAX_SERVER_ADDRESS);
+        if (StringUtils.isBlank(serverIp)){
+            throw new DataXException(NettyErrorCode.SERVER_ADDRESS_ERROR, "未获取到本地ip地址，请检查环境变量是否存在");
+        }
+        // 参数中封装driver的ip地址，"taskGroup"参数是入口类engine需要的
+        taskGroupConfigs.forEach(taskGroup-> {
+            taskGroup.set(CoreConstant.DATAX_CORE_DATAXSERVER_ADDRESS, serverIp + ":" + finalPort);
+            taskGroup.set(CoreConstant.DATAX_CORE_CONTAINER_MODEL, "taskGroup");
+            taskGroup.set(CoreConstant.DATAX_JOB_SETTING_DISTRIBUTE_CPU, configuration.getString(CoreConstant.DATAX_JOB_SETTING_DISTRIBUTE_CPU));
+            taskGroup.set(CoreConstant.DATAX_JOB_SETTING_DISTRIBUTE_MEMORY, configuration.getString(CoreConstant.DATAX_JOB_SETTING_DISTRIBUTE_MEMORY));
+            Integer taskGroupId = taskGroup.getInt(CoreConstant.DATAX_CORE_CONTAINER_TASKGROUP_ID);
+            TaskGroupInfo.taskGroupMap.put(taskGroupId, taskGroup.toJSON());
+        });
+
+        AbstractContainerCommunicator containerCommunicator = new DistributeJobContainerCommunicator(configuration);
         super.setContainerCommunicator(containerCommunicator);
 
         return new DistributeScheduler(containerCommunicator);
+    }
+
+    private Integer startNettyServer(ExecutorService executorService, Integer port, Integer count){
+        Future<Integer> submit = executorService.submit(new NettyServer(port));
+        try {
+            submit.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw DataXException.asDataXException(NettyErrorCode.SERVER_START_ERROR, "netty server 服务启动异常",e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof BindException){
+                if (count <= 0){
+                    throw DataXException.asDataXException(NettyErrorCode.RETRY_COUNT_ERROR, "netty server 服务端口全部被占用，请检查端口" ,e);
+                }
+                LOG.warn("{} 端口已被占用，重试次数：{}", port, count);
+                count--;
+                port++;
+                port = startNettyServer(executorService, port, count);
+            } else {
+                throw DataXException.asDataXException(NettyErrorCode.SERVER_START_ERROR, "netty server 服务启动异常",e);
+            }
+        }
+        return port;
     }
 
     private void post() {

@@ -17,6 +17,8 @@ public enum FrameworkErrorCode implements ErrorCode {
     HOOK_LOAD_ERROR("Framework-05", "加载外部Hook出现错误，通常是由于DataX安装引起的"),
     HOOK_FAIL_ERROR("Framework-06", "执行外部Hook出现错误"),
 
+    REMOTE_FAIL_ERROR("Framework-07", "远程调用未传入服务器地址"),
+
     PLUGIN_INSTALL_ERROR("Framework-10", "DataX插件安装错误, 该问题通常是由于DataX安装错误引起，请联系您的运维解决 ."),
     PLUGIN_NOT_FOUND("Framework-11", "DataX插件配置错误, 该问题通常是由于DataX安装错误引起，请联系您的运维解决 ."),
     PLUGIN_INIT_ERROR("Framework-12", "DataX插件初始化错误, 该问题通常是由于DataX安装错误引起，请联系您的运维解决 ."),

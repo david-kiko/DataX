@@ -9,12 +9,20 @@ import com.alibaba.datax.common.util.Configuration;
 import com.alibaba.datax.common.util.MessageSource;
 import com.alibaba.datax.core.job.JobContainer;
 import com.alibaba.datax.core.taskgroup.TaskGroupContainer;
+import com.alibaba.datax.core.taskgroup.TaskGroupInfo;
 import com.alibaba.datax.core.util.ConfigParser;
 import com.alibaba.datax.core.util.ConfigurationValidate;
 import com.alibaba.datax.core.util.ExceptionTracker;
 import com.alibaba.datax.core.util.FrameworkErrorCode;
 import com.alibaba.datax.core.util.container.CoreConstant;
 import com.alibaba.datax.core.util.container.LoadUtil;
+import com.alibaba.datax.dataxservice.kubernetes.enumeration.K8sClientErrorCode;
+import com.alibaba.datax.dataxservice.kubernetes.util.K8sClientUtil;
+import com.alibaba.datax.dataxservice.netty.client.NettyClient;
+import com.alibaba.datax.dataxservice.netty.enumeration.NettyConstant;
+import com.alibaba.datax.dataxservice.netty.enumeration.NettyErrorCode;
+import io.fabric8.volcano.scheduling.v1beta1.PodGroupStatus;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
@@ -25,6 +33,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -124,33 +134,89 @@ public class Engine {
         options.addOption("job", true, "Job config.");
         options.addOption("jobid", true, "Job unique id.");
         options.addOption("mode", true, "Job runtime mode.");
+        options.addOption("taskgroupid", true, "taskgroup unique id.");
+        options.addOption("driver", true, "driver address.");
 
         BasicParser parser = new BasicParser();
         CommandLine cl = parser.parse(options, args);
 
-        String jobPath = cl.getOptionValue("job");
-
         // 如果用户没有明确指定jobid, 则 datax.py 会指定 jobid 默认值为-1
         String jobIdString = cl.getOptionValue("jobid");
         RUNTIME_MODE = cl.getOptionValue("mode");
+        long jobId = -1;
+        if (!"-1".equalsIgnoreCase(jobIdString)) {
+            jobId = Long.parseLong(jobIdString);
+        }
 
-        Configuration configuration = ConfigParser.parse(jobPath);
+        String taskGroupIdString = cl.getOptionValue("taskgroupid");
+
+        Integer taskGroupId = -1;
+        if (null != taskGroupIdString) {
+            taskGroupId = Integer.parseInt(taskGroupIdString);
+        }
+        Boolean isTaskGroup = taskGroupId != -1;
+
+        Configuration configuration;
+        if (isTaskGroup) {
+            //获取服务端地址
+            String driverAddress = cl.getOptionValue("driver");
+            if (null == driverAddress) {
+                throw DataXException.asDataXException(FrameworkErrorCode.REMOTE_FAIL_ERROR, "远程分布式调用必须传入dirver地址.");
+            }
+
+            //启动netty客户端
+            String[] address = driverAddress.split(":");
+            Future<Object> submit = Executors.newSingleThreadExecutor(new DefaultThreadFactory("netty-client",true)).submit(
+                    new NettyClient(address[0], Integer.parseInt(address[1]), taskGroupId));
+            try {
+                // 阻塞，等待client连接上driver
+                submit.get();
+            } catch (Exception e) {
+                Thread.currentThread().interrupt();
+                throw DataXException.asDataXException(NettyErrorCode.CLIENT_CONNECT_ERROR, "服务端连接失败，请检查服务端是否正常运行或者ip地址是否正确", e);
+            }
+
+            // 等个10min，如果executor还没有连接上driver就直接报错
+            long sleepTime = 1000L;
+            int waitTime = Integer.parseInt(System.getenv().getOrDefault(NettyConstant.SERVER_WAIT_TIME,"600"));
+
+            while (!TaskGroupInfo.taskGroupMap.containsKey(taskGroupId)) {
+                try {
+                    Thread.sleep(sleepTime);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    LOG.error("wait config init thread sleep error", e);
+                }
+
+                waitTime --;
+                if (waitTime < 0){
+                    String message = String.format("超过倒计时，dataX executor没有正常初始化");
+                    LOG.error(message);
+                    throw new DataXException(K8sClientErrorCode.K8S_CLIENT_INIT_ERROR_CODE, message);
+                }
+
+            }
+            String configurationString = TaskGroupInfo.taskGroupMap.get(taskGroupId);
+            configuration = Configuration.from(configurationString);
+            LOG.info("slave configuration is " + configuration);
+        } else {
+            String jobPath = cl.getOptionValue("job");
+            configuration = ConfigParser.parse(jobPath);
+            if ("-1".equalsIgnoreCase(jobIdString)) {
+                // only for dsc & ds & datax 3 update
+                String dscJobUrlPatternString = "/instance/(\\d{1,})/config.xml";
+                String dsJobUrlPatternString = "/inner/job/(\\d{1,})/config";
+                String dsTaskGroupUrlPatternString = "/inner/job/(\\d{1,})/taskGroup/";
+                List<String> patternStringList = Arrays.asList(dscJobUrlPatternString,
+                        dsJobUrlPatternString, dsTaskGroupUrlPatternString);
+                jobId = parseJobIdFromUrl(patternStringList, jobPath);
+            }
+        }
+
+
         // 绑定i18n信息
         MessageSource.init(configuration);
         MessageSource.reloadResourceBundle(Configuration.class);
-
-        long jobId;
-        if (!"-1".equalsIgnoreCase(jobIdString)) {
-            jobId = Long.parseLong(jobIdString);
-        } else {
-            // only for dsc & ds & datax 3 update
-            String dscJobUrlPatternString = "/instance/(\\d{1,})/config.xml";
-            String dsJobUrlPatternString = "/inner/job/(\\d{1,})/config";
-            String dsTaskGroupUrlPatternString = "/inner/job/(\\d{1,})/taskGroup/";
-            List<String> patternStringList = Arrays.asList(dscJobUrlPatternString,
-                    dsJobUrlPatternString, dsTaskGroupUrlPatternString);
-            jobId = parseJobIdFromUrl(patternStringList, jobPath);
-        }
 
         boolean isStandAloneMode = "standalone".equalsIgnoreCase(RUNTIME_MODE);
         if (!isStandAloneMode && jobId == -1) {

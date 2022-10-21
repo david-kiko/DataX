@@ -1,0 +1,59 @@
+{
+  "job": {
+    "setting": {
+      "speed": {
+        "channel": 10
+      },
+      "errorLimit": {
+        "record": 0,
+        "percentage": 0.02
+      }
+    },
+    "content": [{
+      "reader": {
+        "name": "mysqlreader",
+        "parameter": {
+          "username": "root",
+          "password": "123456",
+          "column": [
+            "id",
+            "name"
+          ],
+          "splitPk": "id",
+          "connection": [{
+            "table": [
+              "datax_input"
+            ],
+            "jdbcUrl": [
+              "jdbc:mysql://192.168.6.199:3306/demo"
+            ]
+          }]
+        }
+      },
+      "writer": {
+        "name": "mysqlwriter",
+        "parameter": {
+          "writeMode": "insert",
+          "username": "root",
+          "password": "123456",
+          "column": [
+            "id",
+            "name"
+          ],
+          "session": [
+            "set session sql_mode='ANSI'"
+          ],
+          "preSql": [
+            "delete from datax_output"
+          ],
+          "connection": [{
+            "jdbcUrl": "jdbc:mysql://192.168.6.199:3306/demo",
+            "table": [
+              "datax_output"
+            ]
+          }]
+        }
+      }
+    }]
+  }
+}
