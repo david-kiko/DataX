@@ -1,0 +1,37 @@
+{
+    "job": {
+        "setting": {
+            "speed": {
+                "channel": 1
+            }
+        },
+        "content": [
+            {
+                "reader": {
+                    "name": "httpreader",
+                    "parameter": {
+                        "connection": {
+                            "url": "http://localhost:8080/api/post_data"
+                        },
+                        "reqParams": {},
+                        "isPage": false,
+                        "resultKey": "result.data",
+                        "method": "POST",
+                        "column": ["cid", "name"],
+                        "headers": {
+                            "X-Powered-by": "Addax",
+                            "Authorization": "Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyIiwiZXhwIjoxNjE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+                        }
+                    }
+                },
+                "writer": {
+                    "name": "streamwriter",
+                    "parameter": {
+                        "print": true,
+                        "encoding": "UTF-8"
+                    }
+                }
+            }
+        ]
+    }
+} 
