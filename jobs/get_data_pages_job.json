@@ -1,0 +1,52 @@
+{
+  "job": {
+    "setting": {
+      "speed": {
+        "channel": 1
+      }
+    },
+    "content": [
+      {
+        "reader": {
+          "name": "httpreader",
+          "parameter": {
+            "encoding": "UTF-8",
+            "column": [
+              "cid",
+              "cname"
+            ],
+            "headers": {
+              "Authorization": "Basic YWRtaW46bmltZGE="
+            },
+            "connection": {
+              "url": "http://localhost:8080/api/get_data"
+            },
+            "method": "GET",
+            "isPage": true,
+            "pageParams": {
+              "pageIndex": {
+                "key": "page",
+                "value": 0
+              },
+              "pageSize": {
+                "key": "size",
+                "value": 10
+              }
+            },
+            "resultKey": "result.data.content",
+            "reqParams": {
+              "debug": "true"
+            }
+          }
+        },
+        "writer": {
+          "name": "streamwriter",
+          "parameter": {
+            "print": true,
+            "encoding": "UTF-8"
+          }
+        }
+      }
+    ]
+  }
+}

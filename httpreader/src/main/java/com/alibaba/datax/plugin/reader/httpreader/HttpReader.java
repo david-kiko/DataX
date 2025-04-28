@@ -60,11 +60,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import static com.alibaba.datax.plugin.reader.httpreader.HttpReaderErrorCode.ILLEGAL_VALUE;
 import static com.alibaba.datax.plugin.reader.httpreader.HttpReaderErrorCode.REQUIRED_VALUE;
@@ -304,14 +300,18 @@ public class HttpReader extends Reader
             if (this.password != null) {
                 // setup BasicAuth
                 // Create the authentication scope
-                HttpHost target = new HttpHost(uriBuilder.getScheme(), uriBuilder.getHost(), uriBuilder.getPort());
+                // HttpHost target = new HttpHost(uriBuilder.getScheme(), uriBuilder.getHost(), uriBuilder.getPort());
                 // Create credential pair
-                UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(username, password.toCharArray());
+                // UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(username, password.toCharArray());
                 // Inject the credentials
-                if (credsProvider == null) {
-                    credsProvider = new BasicCredentialsProvider();
-                }
-                credsProvider.setCredentials(new AuthScope(target), credentials);
+                // if (credsProvider == null) {
+                //    credsProvider = new BasicCredentialsProvider();
+                //}
+                // credsProvider.setCredentials(new AuthScope(target), credentials);
+                // 直接设置 Authorization 头
+                String auth = this.username + ":" + this.password;
+                String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+                request.addHeader("Authorization", "Basic " + encodedAuth);
             }
 
             if (this.token != null) {
