@@ -10,6 +10,7 @@
         "reader": {
           "name": "httpreader",
           "parameter": {
+            "logData": true,
             "encoding": "UTF-8",
             "column": [
               "cid",
@@ -19,7 +20,7 @@
               "Authorization": "Basic YWRtaW46bmltZGE="
             },
             "connection": {
-              "url": "http://localhost:8080/api/get_data"
+              "url": "http://192.168.30.232:18081/api/get_data"
             },
             "method": "GET",
             "isPage": true,

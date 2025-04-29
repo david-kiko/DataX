@@ -250,6 +250,11 @@ public class HttpReader extends Reader
                     }
                 }
                 recordSender.sendToWriter(record);
+                
+                // Log data if logData is true
+                if (readerSliceConfig.getBool(HttpKey.LOG_DATA, false)) {
+                    LOG.info("Record {}: {}", i + 1, jsonObject.toJSONString());
+                }
             }
             return i;
         }

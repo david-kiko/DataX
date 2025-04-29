@@ -56,4 +56,7 @@ public final class HttpKey {
     public static final String PAGE_PARAMS = "pageParams";
     public static final String PAGE_SIZE = "pageSize";
     public static final String PAGE_INDEX = "pageIndex";
+    
+    // whether to log each record data, default is false
+    public static final String LOG_DATA = "logData";
 }
